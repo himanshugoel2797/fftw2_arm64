@@ -2,7 +2,7 @@ name: Build FFTW 2.1.5 on Apple Silicon
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, setup-ci]
   pull_request:
   workflow_dispatch:
 
