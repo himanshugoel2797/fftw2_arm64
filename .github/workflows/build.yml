@@ -1,0 +1,78 @@
+name: Build FFTW 2.1.5 on Apple Silicon
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & test (${{ matrix.os }}, ${{ matrix.variant }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-14 / macos-15 are Apple Silicon (M-series) runners.
+        os: [macos-14, macos-15]
+        variant: [double, single]
+    env:
+      FFTW_VERSION: 2.1.5
+      FFTW_URL: https://www.fftw.org/fftw-2.1.5.tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check host architecture
+        run: |
+          uname -a
+          uname -m
+          sysctl -n machdep.cpu.brand_string || true
+          test "$(uname -m)" = "arm64"
+
+      - name: Install autotools
+        # autoreconf is what regenerates configure/config.sub/config.guess
+        # using the host's modern helper scripts — that's the actual fix.
+        run: brew install autoconf automake libtool
+
+      - name: Download FFTW ${{ env.FFTW_VERSION }}
+        run: |
+          curl -fsSL "$FFTW_URL" -o fftw-${FFTW_VERSION}.tar.gz
+          tar xzf fftw-${FFTW_VERSION}.tar.gz
+
+      - name: Apply Debian 05_ac_define_syntax.diff
+        working-directory: fftw-${{ env.FFTW_VERSION }}
+        # Fixes the pre-autoconf-2.68 AC_DEFINE calls in configure.in
+        # so autoreconf can actually run. Taken from Debian's fftw 2.1.5-6
+        # package; see https://github.com/pemsley/coot/issues/33#issuecomment-1086901325
+        # and https://trac.macports.org/ticket/63527.
+        run: patch -p1 < "$GITHUB_WORKSPACE/patches/05_ac_define_syntax.diff"
+
+      - name: Regenerate build system with autoreconf -fvi
+        working-directory: fftw-${{ env.FFTW_VERSION }}
+        # -f force, -v verbose, -i install missing aux files. This pulls in
+        # current config.sub/config.guess which recognize arm64-apple-darwin.
+        run: autoreconf -fvi
+
+      - name: Configure
+        working-directory: fftw-${{ env.FFTW_VERSION }}
+        run: |
+          FLAGS=()
+          if [ "${{ matrix.variant }}" = "single" ]; then
+            FLAGS+=(--enable-float)
+          fi
+          ./configure --disable-fortran "${FLAGS[@]}"
+
+      - name: Build
+        working-directory: fftw-${{ env.FFTW_VERSION }}
+        run: make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Run tests
+        working-directory: fftw-${{ env.FFTW_VERSION }}/tests
+        run: ./fftw_test -s 64
+
+      - name: Install into staging prefix (sanity check)
+        working-directory: fftw-${{ env.FFTW_VERSION }}
+        run: |
+          make install DESTDIR="$PWD/_stage"
+          find _stage -maxdepth 5 -type f | sort
