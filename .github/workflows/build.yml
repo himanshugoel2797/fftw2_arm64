@@ -32,3 +32,20 @@ jobs:
 
       - name: Build via build.sh
         run: ./build.sh --${{ matrix.variant }}
+
+      - name: Upload compiled library (install tree)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fftw-2.1.5-${{ matrix.os }}-${{ matrix.variant }}
+          path: dist/install-${{ matrix.variant }}/
+          if-no-files-found: error
+
+      # The patched source tarball is identical across matrix cells —
+      # only upload it once to avoid name collisions.
+      - name: Upload patched source tarball
+        if: matrix.os == 'macos-15' && matrix.variant == 'double'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fftw-2.1.5-patched-src
+          path: dist/fftw-2.1.5-patched.tar.gz
+          if-no-files-found: error

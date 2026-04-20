@@ -43,7 +43,16 @@ Under the hood the script:
 
 [.github/workflows/build.yml](.github/workflows/build.yml) runs
 `build.sh` on `macos-14` and `macos-15` runners (both Apple Silicon)
-in a 2×2 matrix of OS × precision.
+in a 2×2 matrix of OS × precision. Each successful run publishes
+downloadable artifacts on the run summary page:
+
+- `fftw-2.1.5-patched-src` — source tree after the Debian patch and
+  `autoreconf -fvi`, ready to `./configure && make` on any modern host.
+- `fftw-2.1.5-macos-14-double`, `fftw-2.1.5-macos-14-single`,
+  `fftw-2.1.5-macos-15-double`, `fftw-2.1.5-macos-15-single` — the
+  compiled `libfftw.*` / `librfftw.*` (or `libsfftw.*` / `libsrfftw.*`
+  for single precision), headers, and helper binaries, as a staged
+  `usr/local/` tree from `make install DESTDIR=...`.
 
 ## References
 
